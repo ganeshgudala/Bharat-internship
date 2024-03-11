@@ -1,0 +1,71 @@
+# IMPORTANT: RUN THIS CELL IN ORDER TO IMPORT YOUR KAGGLE DATA SOURCES
+# TO THE CORRECT LOCATION (/kaggle/input) IN YOUR NOTEBOOK,
+# THEN FEEL FREE TO DELETE THIS CELL.
+# NOTE: THIS NOTEBOOK ENVIRONMENT DIFFERS FROM KAGGLE'S PYTHON
+# ENVIRONMENT SO THERE MAY BE MISSING LIBRARIES USED BY YOUR
+# NOTEBOOK.
+
+import os
+import sys
+from tempfile import NamedTemporaryFile
+from urllib.request import urlopen
+from urllib.parse import unquote, urlparse
+from urllib.error import HTTPError
+from zipfile import ZipFile
+import tarfile
+import shutil
+
+CHUNK_SIZE = 40960
+DATA_SOURCE_MAPPING = 'tmdb-movie-metadata:https%3A%2F%2Fstorage.googleapis.com%2Fkaggle-data-sets%2F138%2F4508%2Fbundle%2Farchive.zip%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Dgcp-kaggle-com%2540kaggle-161607.iam.gserviceaccount.com%252F20240310%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20240310T095845Z%26X-Goog-Expires%3D259200%26X-Goog-SignedHeaders%3Dhost%26X-Goog-Signature%3D879a647adc9a732c36b9a2f8aa6931a79859907785c75fc257ca671c5c9b8a254902e33d879bcc3df43e7f93da80a9459f0ce4c5024b98e480dd7ff879f7faf0b1877a2033dc2285fbc63654d89531c71887130dfc19f784958d65f22534b36391cbb4a6a68900e15e4738f1e0d67c5a317f329d96e57e2929dca968745cd3634ccef10d3bca82cb4ac1bfb9f05bc768d649fc4342e773a529ef3cda2f8328dcff068dcd079f7e0d1cff7d7117ee2806427300c369639616fb498bbd6c1ea2d71987a59c395366896eeaea98b3c0a93ab2deabb4f2e044ebf0ef8d9160b848bb4e1c2c48ffe722756024fe1c1d811e5bf487d014b28229c1a0c6fbb0078f59e1,the-movies-dataset:https%3A%2F%2Fstorage.googleapis.com%2Fkaggle-data-sets%2F3405%2F6663%2Fbundle%2Farchive.zip%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Dgcp-kaggle-com%2540kaggle-161607.iam.gserviceaccount.com%252F20240310%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20240310T095845Z%26X-Goog-Expires%3D259200%26X-Goog-SignedHeaders%3Dhost%26X-Goog-Signature%3D6a86ebc7360defdb4fc523ece77b57ee4f27101001c29360092bbb1de355ad4b2bc16b3cd71f1a07ba482457a735262a86dfecaa4ef8c871c311980f15373275cbc744497c715bbdb3cc3a0977b98a00ba0c013dbd7e9a012813a59c87d03157c00599677e95cae47b5fb62fc4a55737c5c1f4b9ee2b4db499c7696474c3afa4f33adc3abdb2eb15551b8d9028b8b15c40279f5348234830fb9897bb74c3d289360d11673a6f1ae8e96d4bc0f64872ab2387adbd6ff8d477c2b7e3f5773ccf1c6aed754687e16d7d5c7db9f4d851d3c488b1bd5b5817cf4573225588c26a3a8e15285b18a09c8662bc7f2cbf82edca90df766396ba95a003a740ebfe7b2245d2'
+
+KAGGLE_INPUT_PATH='/kaggle/input'
+KAGGLE_WORKING_PATH='/kaggle/working'
+KAGGLE_SYMLINK='kaggle'
+
+!umount /kaggle/input/ 2> /dev/null
+shutil.rmtree('/kaggle/input', ignore_errors=True)
+os.makedirs(KAGGLE_INPUT_PATH, 0o777, exist_ok=True)
+os.makedirs(KAGGLE_WORKING_PATH, 0o777, exist_ok=True)
+
+try:
+  os.symlink(KAGGLE_INPUT_PATH, os.path.join("..", 'input'), target_is_directory=True)
+except FileExistsError:
+  pass
+try:
+  os.symlink(KAGGLE_WORKING_PATH, os.path.join("..", 'working'), target_is_directory=True)
+except FileExistsError:
+  pass
+
+for data_source_mapping in DATA_SOURCE_MAPPING.split(','):
+    directory, download_url_encoded = data_source_mapping.split(':')
+    download_url = unquote(download_url_encoded)
+    filename = urlparse(download_url).path
+    destination_path = os.path.join(KAGGLE_INPUT_PATH, directory)
+    try:
+        with urlopen(download_url) as fileres, NamedTemporaryFile() as tfile:
+            total_length = fileres.headers['content-length']
+            print(f'Downloading {directory}, {total_length} bytes compressed')
+            dl = 0
+            data = fileres.read(CHUNK_SIZE)
+            while len(data) > 0:
+                dl += len(data)
+                tfile.write(data)
+                done = int(50 * dl / int(total_length))
+                sys.stdout.write(f"\r[{'=' * done}{' ' * (50-done)}] {dl} bytes downloaded")
+                sys.stdout.flush()
+                data = fileres.read(CHUNK_SIZE)
+            if filename.endswith('.zip'):
+              with ZipFile(tfile) as zfile:
+                zfile.extractall(destination_path)
+            else:
+              with tarfile.open(tfile.name) as tarfile:
+                tarfile.extractall(destination_path)
+            print(f'\nDownloaded and uncompressed: {directory}')
+    except HTTPError as e:
+        print(f'Failed to load (likely expired) {download_url} to path {destination_path}')
+        continue
+    except OSError as e:
+        print(f'Failed to load {download_url} to path {destination_path}')
+        continue
+
+print('Data source import complete.')
