@@ -3,11 +3,24 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
+import requests
+import zipfile
+from io import BytesIO
 
-# Step 1: Read the Iris dataset from CSV
-iris_data = pd.read_csv('Iris.csv')
+# Step 1: Define the URL of the ZIP file containing the CSV
+zip_url = 'https://sendeyo.com/en/440425e912'  # Replace with your ZIP file URL
 
-# Step 2: Preprocess the data
+# Step 2: Download the ZIP file
+response = requests.get(zip_url)
+
+# Step 3: Extract the CSV file from the ZIP file
+with zipfile.ZipFile(BytesIO(response.content)) as z:
+    # Assume there's only one file in the zip archive
+    csv_filename = z.namelist()[0]
+    with z.open(csv_filename) as f:
+        iris_data = pd.read_csv(f)
+
+# Step 4: Preprocess the data
 X = iris_data.iloc[:, :-1].values
 y = iris_data.iloc[:, -1].values.reshape(-1, 1)  # Reshape y to a column vector
 
@@ -18,7 +31,7 @@ y = encoder.fit_transform(y).toarray()
 # Split the dataset into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Step 3: Build and train a neural network model
+# Step 5: Build and train a neural network model
 model = tf.keras.Sequential([
     tf.keras.layers.Dense(64, activation='relu', input_shape=(4,)),
     tf.keras.layers.Dense(64, activation='relu'),
@@ -31,6 +44,6 @@ model.compile(optimizer='adam',
 
 model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=0)
 
-# Step 4: Evaluate the model's performance
+# Step 6: Evaluate the model's performance
 _, accuracy = model.evaluate(X_test, y_test)
 print("Accuracy:", accuracy)
